@@ -1,0 +1,75 @@
+-- AI-powered application example
+
+struct TextAnalysisRequest {
+  text: str,
+  model: str
+}
+
+struct AnalysisResult {
+  sentiment: str,
+  confidence: f64,
+  keywords: [str]
+}
+
+-- RAG-powered search
+fn search_docs(query: str) -> [str] {
+  results = rag.search(query, top_k=5)
+  results |> map(r => r.content)
+}
+
+-- AI generation with prompt
+fn generate_summary(text: str) -> str {
+  %% Summarize this text in 2-3 sentences: {text}
+}
+
+-- Multi-step agent
+fn analyze_text(request: TextAnalysisRequest) -> AnalysisResult {
+  -- Step 1: Get LLM analysis
+  analysis = ai.generate("Analyze sentiment: {request.text}")
+  
+  -- Step 2: Search related documents
+  docs = rag.search(request.text, top_k=3)
+  
+  -- Step 3: Extract keywords with embeddings
+  keywords = embed.extract_keywords(request.text)
+  
+  AnalysisResult {
+    sentiment: analysis.sentiment,
+    confidence: analysis.confidence,
+    keywords: keywords
+  }
+}
+
+-- Code generation example
+fn generate_api_endpoint(endpoint_name: str, fields: [str]) {
+  %% Generate a REST API endpoint called {endpoint_name} with these fields: {fields}
+}
+
+-- Async AI call
+async fn fetch_and_analyze(url: str) -> str {
+  response = await http.get(url)
+  content = response.body
+  summary = await ai.generate("Summarize: {content}")
+  summary
+}
+
+-- Agent with tools
+agent CodeAssistant = {
+  name: "CodeAssistant",
+  tools: [search, execute, refine],
+  system_prompt: %% "You are an expert programmer helping write Vibe code"
+}
+
+fn main() {
+  -- Use the agent
+  result = CodeAssistant.run("Write a function that validates email addresses")
+  print(result)
+  
+  -- Analyze text
+  request = TextAnalysisRequest {
+    text: "I love this new programming language!",
+    model: "claude"
+  }
+  result = analyze_text(request)
+  print(result)
+}

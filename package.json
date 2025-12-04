@@ -1,0 +1,35 @@
+{
+  "name": "vibe-lang",
+  "version": "0.1.0",
+  "description": "AI-native programming language with voice/prompt input and multi-language compilation",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "repl": "node src/repl.js",
+    "compile": "node src/compiler.js",
+    "test": "node --test src/**/*.test.js",
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
+  },
+  "keywords": [
+    "ai",
+    "vibe",
+    "language",
+    "compiler",
+    "prompt",
+    "voice",
+    "llm",
+    "rag"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "yaml": "^2.3.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.50.0",
+    "prettier": "^3.0.0"
+  }
+}

@@ -1,0 +1,51 @@
+-- Hello World in Vibe
+
+fn main() {
+  print("Hello, Vibe world!")
+}
+
+-- Simple function
+fn add(a: i32, b: i32) -> i32 {
+  a + b
+}
+
+-- Using AI to generate code
+fn classify(text: str) {
+  %% classify this text as positive, negative, or neutral
+}
+
+-- Multiple dispatch
+fn process(x: i32) -> str { "number" }
+fn process(x: str) -> str { "string" }
+
+-- Option type (no nulls)
+fn safe_divide(a: i32, b: i32) -> Option<i32> {
+  if b == 0 {
+    None
+  } else {
+    Some(a / b)
+  }
+}
+
+-- Struct
+struct User {
+  id: u64,
+  name: str,
+  email: str
+}
+
+-- Enum
+enum Status {
+  Active,
+  Inactive,
+  Pending
+}
+
+-- Match statement
+fn status_message(status: Status) -> str {
+  match status {
+    Active => "User is active",
+    Inactive => "User is inactive",
+    Pending => "User is pending"
+  }
+}
