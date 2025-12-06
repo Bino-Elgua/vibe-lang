@@ -11,7 +11,11 @@
     "compile": "node src/compiler.js",
     "test": "node --test src/**/*.test.js",
     "lint": "eslint src/",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "roadmap": "node src/roadmap-cli.js",
+    "roadmap:status": "node src/roadmap-cli.js status",
+    "roadmap:todos": "node src/roadmap-cli.js list-todos",
+    "roadmap:high": "node src/roadmap-cli.js list-todos HIGH"
   },
   "keywords": [
     "ai",

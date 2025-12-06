@@ -1,0 +1,282 @@
+-- BrowserOS App Example: Task Manager
+-- Demonstrates PWA, widgets, sync, and offline support
+
+-- Configure as PWA with standalone display
+#[pwa(display: "standalone", theme_color: "#2196F3", background_color: "#ffffff")]
+
+-- Declare the main app
+#[app(name: "Task Manager", version: "1.0.0", description: "Manage your tasks across all devices")]
+fn main() {
+  print("🎵 Task Manager - Built with Vibe")
+  print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  print("")
+  initialize_app()
+}
+
+-- Initialize the application
+fn initialize_app() {
+  -- Setup file system access
+  init_file_system()
+  
+  -- Initialize storage
+  init_storage()
+  
+  -- Register service worker for offline support
+  register_service_worker()
+  
+  -- Register app widgets
+  register_widgets()
+  
+  -- Start app
+  start_main_ui()
+}
+
+-- Setup file system access for importing/exporting tasks
+fn init_file_system() {
+  print("📁 Initializing file system access...")
+  -- File system operations enabled
+}
+
+-- Initialize browser storage
+fn init_storage() {
+  print("💾 Initializing storage...")
+  -- Storage initialized (localStorage, IndexedDB, Cache)
+}
+
+-- Register service worker for offline functionality
+fn register_service_worker() {
+  print("🔄 Registering service worker...")
+  -- Service worker registered
+  -- App works offline with cached data
+}
+
+-- Register application widgets/shortcuts
+fn register_widgets() {
+  print("🎯 Registering widgets...")
+  
+  -- Dashboard widget
+  register_dashboard_widget()
+  
+  -- Tasks list widget
+  register_tasks_widget()
+  
+  -- Settings widget
+  register_settings_widget()
+  
+  -- Statistics widget
+  register_stats_widget()
+}
+
+-- Dashboard widget shortcut
+#[widget(name: "Dashboard", url: "/dashboard", icon: "dashboard.png")]
+fn register_dashboard_widget() {
+  print("✅ Dashboard widget registered")
+}
+
+-- Tasks widget shortcut
+#[widget(name: "My Tasks", url: "/tasks", icon: "tasks.png")]
+fn register_tasks_widget() {
+  print("✅ Tasks widget registered")
+}
+
+-- Settings widget shortcut
+#[widget(name: "Settings", url: "/settings", icon: "settings.png")]
+fn register_settings_widget() {
+  print("✅ Settings widget registered")
+}
+
+-- Statistics widget shortcut
+#[widget(name: "Stats", url: "/stats", icon: "stats.png")]
+fn register_stats_widget() {
+  print("✅ Statistics widget registered")
+}
+
+-- Main UI startup
+fn start_main_ui() {
+  print("")
+  print("🚀 Starting Task Manager UI...")
+  print("   → Dashboard")
+  print("   → My Tasks")
+  print("   → Settings")
+  print("   → Statistics")
+}
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- TASK DATA STRUCTURE
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+struct Task {
+  id: str,
+  title: str,
+  description: str,
+  completed: bool,
+  priority: str,
+  created_at: i64,
+  due_date: Option<i64>,
+  tags: [str]
+}
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- SYNC MANAGEMENT
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+-- Enable cross-device sync for tasks
+#[sync(provider: "indexeddb", key: "tasks", ttl: null, autoSync: true, cloudSync: true)]
+mut tasks: [Task] = []
+
+-- Enable cross-device sync for user preferences
+#[sync(provider: "localStorage", key: "user_prefs")]
+mut user_prefs = {
+  theme: "dark",
+  language: "en",
+  notifications: true
+}
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- OFFLINE SUPPORT
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+-- Enable offline support for task creation
+#[offline]
+fn create_task(title: str, description: str) -> Task {
+  let task = Task {
+    id: generate_id(),
+    title: title,
+    description: description,
+    completed: false,
+    priority: "medium",
+    created_at: current_timestamp(),
+    due_date: none,
+    tags: []
+  }
+  
+  tasks.push(task)
+  sync_storage()
+  task
+}
+
+-- Enable offline support for task fetching
+#[offline]
+fn fetch_tasks(filter: str = "all") -> [Task] {
+  match filter {
+    case "completed" -> tasks.filter(|t| t.completed)
+    case "pending" -> tasks.filter(|t| !t.completed)
+    case "high" -> tasks.filter(|t| t.priority == "high")
+    default -> tasks
+  }
+}
+
+-- Mark task as complete
+#[offline]
+fn complete_task(task_id: str) -> bool {
+  for task in tasks {
+    if task.id == task_id {
+      task.completed = true
+      sync_storage()
+      return true
+    }
+  }
+  false
+}
+
+-- Delete task
+#[offline]
+fn delete_task(task_id: str) -> bool {
+  let original_len = len(tasks)
+  tasks = tasks.filter(|t| t.id != task_id)
+  sync_storage()
+  len(tasks) < original_len
+}
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- HELPER FUNCTIONS
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+fn generate_id() -> str {
+  %% generate a unique UUID
+}
+
+fn current_timestamp() -> i64 {
+  %% return current Unix timestamp in milliseconds
+}
+
+fn sync_storage() {
+  -- Synchronize tasks to storage
+  -- This runs automatically with #[sync] macro
+  -- But can be called manually for explicit sync
+}
+
+fn export_tasks_json() -> str {
+  %% convert tasks to JSON format
+}
+
+fn import_tasks_json(json: str) -> bool {
+  %% parse JSON and import tasks
+}
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- DASHBOARD VIEW
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+fn show_dashboard() {
+  let total = len(tasks)
+  let completed = len(tasks.filter(|t| t.completed))
+  let pending = total - completed
+  
+  print("═══════════════════════════════════")
+  print("📊 DASHBOARD")
+  print("═══════════════════════════════════")
+  print("")
+  print(format("Total Tasks:    {}", total))
+  print(format("Completed:      {}", completed))
+  print(format("Pending:        {}", pending))
+  print(format("Completion:     {}%", (completed / total) * 100))
+  print("")
+}
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- SETTINGS VIEW
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+fn show_settings() {
+  print("═══════════════════════════════════")
+  print("⚙️ SETTINGS")
+  print("═══════════════════════════════════")
+  print("")
+  print(format("Theme:          {}", user_prefs.theme))
+  print(format("Language:       {}", user_prefs.language))
+  print(format("Notifications:  {}", user_prefs.notifications))
+  print("")
+}
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- STATISTICS VIEW
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+fn show_statistics() {
+  let high_priority = len(tasks.filter(|t| t.priority == "high"))
+  let medium_priority = len(tasks.filter(|t| t.priority == "medium"))
+  let low_priority = len(tasks.filter(|t| t.priority == "low"))
+  
+  print("═══════════════════════════════════")
+  print("📈 STATISTICS")
+  print("═══════════════════════════════════")
+  print("")
+  print(format("High Priority:   {}", high_priority))
+  print(format("Medium Priority: {}", medium_priority))
+  print(format("Low Priority:    {}", low_priority))
+  print("")
+}
+
+-- Example usage demonstrating offline and sync capabilities
+-- fn run_example() {
+--   create_task("Buy groceries", "Milk, bread, eggs")
+--   create_task("Complete project", "Finish Vibe integration")
+--   create_task("Review code", "Check pull requests")
+--   
+--   show_dashboard()
+--   show_statistics()
+--   
+--   let pending = fetch_tasks("pending")
+--   print(format("Pending tasks: {}", len(pending)))
+-- }

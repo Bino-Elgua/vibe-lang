@@ -1,6 +1,6 @@
 /**
  * LLM Integration for Vibe
- * Supports Claude, Ollama, HuggingFace, and fallback
+ * Supports Claude, Ollama, HuggingFace, Grok, and AI Tools
  */
 
 class LLMIntegration {
@@ -8,7 +8,54 @@ class LLMIntegration {
     this.provider = process.env.LLM_PROVIDER || 'claude';
     this.apiKey = process.env.ANTHROPIC_API_KEY || null;
     this.hfToken = process.env.HF_TOKEN || null;
+    this.xaiKey = process.env.XAI_API_KEY || null;
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+    this.groqKey = process.env.GROQ_API_KEY || null;
+    this.tools = this.initializeTools();
+    // Feature 14: Prompt Optimization
+    this.prompt = { optimize: true };
+    // Feature 16: Multi-Model Fallback
+    this.providers = ['claude', 'ollama', 'hf', 'grok'];
+  }
+
+  initializeTools() {
+    return {
+      // ML/AI Tools
+      tensorflow: { name: 'TensorFlow', models: ['sequential', 'functional'], frameworks: ['python', 'javascript', 'go'] },
+      pytorch: { name: 'PyTorch', models: ['nn.Module', 'lightning'], frameworks: ['python'] },
+      scikit: { name: 'Scikit-learn', models: ['classification', 'regression'], frameworks: ['python'] },
+      xgboost: { name: 'XGBoost', models: ['tree', 'linear'], frameworks: ['python', 'r', 'julia'] },
+      
+      // LLM APIs
+      openai: { name: 'OpenAI API', models: ['gpt-4', 'gpt-3.5'], features: ['chat', 'embeddings', 'vision'] },
+      anthropic: { name: 'Anthropic Claude', models: ['claude-3-opus', 'claude-3-sonnet'], features: ['vision', 'code'] },
+      groq: { name: 'Groq', models: ['mixtral', 'llama2'], features: ['fast-inference'] },
+      grok: { name: 'Grok AI', models: ['grok-1'], features: ['reasoning', 'multimodal'] },
+      
+      // Embedding & Search
+      pinecone: { name: 'Pinecone', type: 'vector-db', operations: ['upsert', 'query', 'delete'] },
+      weaviate: { name: 'Weaviate', type: 'vector-db', operations: ['semantic-search', 'filtering'] },
+      qdrant: { name: 'Qdrant', type: 'vector-db', operations: ['vector-search', 'similarity'] },
+      
+      // Data Science
+      pandas: { name: 'Pandas', operations: ['dataframe', 'groupby', 'merge'], frameworks: ['python'] },
+      numpy: { name: 'NumPy', operations: ['array', 'linear-algebra', 'stats'], frameworks: ['python'] },
+      polars: { name: 'Polars', operations: ['lazy-eval', 'parallel'], frameworks: ['python', 'rust'] },
+      
+      // Symbolic AI
+      sympy: { name: 'SymPy', operations: ['algebra', 'calculus', 'logic'], frameworks: ['python'] },
+      mathematica: { name: 'Mathematica', type: 'symbolic', operations: ['compute', 'visualize'] },
+      
+      // Vision & Multimodal
+      opencv: { name: 'OpenCV', operations: ['image-processing', 'object-detection'], frameworks: ['python', 'cpp'] },
+      pillow: { name: 'Pillow', operations: ['image-io', 'transforms'], frameworks: ['python'] },
+      torchvision: { name: 'TorchVision', operations: ['pretrained-models', 'datasets'], frameworks: ['python'] },
+      
+      // NLP Tools
+      huggingface: { name: 'HuggingFace', operations: ['transformers', 'datasets', 'tokenizers'], frameworks: ['python'] },
+      spacy: { name: 'spaCy', operations: ['nlp-pipeline', 'entity-recognition'], frameworks: ['python'] },
+      nltk: { name: 'NLTK', operations: ['tokenization', 'pos-tagging'], frameworks: ['python'] },
+    };
   }
 
   async generateCode(prompt, context = {}) {
@@ -237,4 +284,170 @@ Please solve the goal step by step.`;
   }
 }
 
-export { LLMIntegration, RAGIntegration, Agent };
+// AI Tools Integration
+class AIToolsRegistry {
+  constructor() {
+    this.tools = new Map();
+    this.registerDefaultTools();
+  }
+
+  registerDefaultTools() {
+    // ML/DL Frameworks
+    this.register('tensorflow', {
+      category: 'ML Framework',
+      description: 'TensorFlow for neural networks',
+      languages: ['python', 'javascript', 'go'],
+      install: 'pip install tensorflow',
+      usage: `import tensorflow as tf
+model = tf.keras.Sequential([...])`,
+    });
+
+    this.register('pytorch', {
+      category: 'ML Framework',
+      description: 'PyTorch for deep learning',
+      languages: ['python'],
+      install: 'pip install torch',
+      usage: `import torch
+model = torch.nn.Sequential(...)`,
+    });
+
+    this.register('scikit-learn', {
+      category: 'ML Framework',
+      description: 'Scikit-learn for ML algorithms',
+      languages: ['python'],
+      install: 'pip install scikit-learn',
+      usage: `from sklearn.ensemble import RandomForestClassifier
+clf = RandomForestClassifier()`,
+    });
+
+    // LLM APIs
+    this.register('openai', {
+      category: 'LLM API',
+      description: 'OpenAI GPT models',
+      languages: ['python', 'javascript', 'go'],
+      install: 'pip install openai',
+      usage: `from openai import OpenAI
+client = OpenAI(api_key="...")`,
+      apiDocs: 'https://platform.openai.com/docs',
+    });
+
+    this.register('anthropic-claude', {
+      category: 'LLM API',
+      description: 'Anthropic Claude models',
+      languages: ['python', 'javascript', 'go'],
+      install: 'pip install anthropic',
+      usage: `from anthropic import Anthropic
+client = Anthropic(api_key="...")`,
+      apiDocs: 'https://docs.anthropic.com',
+    });
+
+    this.register('groq', {
+      category: 'LLM API',
+      description: 'Groq fast LLM inference',
+      languages: ['python', 'javascript'],
+      install: 'pip install groq',
+      usage: `from groq import Groq
+client = Groq(api_key="...")`,
+    });
+
+    // Vector Databases
+    this.register('pinecone', {
+      category: 'Vector DB',
+      description: 'Pinecone vector database',
+      languages: ['python', 'javascript'],
+      install: 'pip install pinecone-client',
+      usage: `import pinecone
+index = pinecone.Index("index-name")`,
+    });
+
+    this.register('weaviate', {
+      category: 'Vector DB',
+      description: 'Weaviate vector search engine',
+      languages: ['python', 'javascript', 'go'],
+      install: 'pip install weaviate-client',
+      usage: `import weaviate
+client = weaviate.Client("http://localhost:8080")`,
+    });
+
+    // Data Science
+    this.register('pandas', {
+      category: 'Data Science',
+      description: 'Pandas for data manipulation',
+      languages: ['python'],
+      install: 'pip install pandas',
+      usage: `import pandas as pd
+df = pd.read_csv("data.csv")`,
+    });
+
+    this.register('polars', {
+      category: 'Data Science',
+      description: 'Polars for fast data processing',
+      languages: ['python', 'rust'],
+      install: 'pip install polars',
+      usage: `import polars as pl
+df = pl.read_csv("data.csv")`,
+    });
+
+    // Vision
+    this.register('opencv', {
+      category: 'Vision',
+      description: 'OpenCV for image processing',
+      languages: ['python', 'cpp', 'javascript'],
+      install: 'pip install opencv-python',
+      usage: `import cv2
+img = cv2.imread("image.jpg")`,
+    });
+
+    // NLP
+    this.register('huggingface-transformers', {
+      category: 'NLP',
+      description: 'HuggingFace transformers library',
+      languages: ['python'],
+      install: 'pip install transformers',
+      usage: `from transformers import pipeline
+pipe = pipeline("text-classification")`,
+    });
+
+    this.register('spacy', {
+      category: 'NLP',
+      description: 'spaCy for NLP pipelines',
+      languages: ['python'],
+      install: 'pip install spacy',
+      usage: `import spacy
+nlp = spacy.load("en_core_web_sm")`,
+    });
+  }
+
+  register(name, config) {
+    this.tools.set(name, config);
+  }
+
+  getTool(name) {
+    return this.tools.get(name);
+  }
+
+  listTools(category = null) {
+    if (category) {
+      return Array.from(this.tools.values()).filter(t => t.category === category);
+    }
+    return Array.from(this.tools.values());
+  }
+
+  listCategories() {
+    const categories = new Set();
+    this.tools.forEach(tool => categories.add(tool.category));
+    return Array.from(categories);
+  }
+
+  getInstallCommand(name) {
+    const tool = this.tools.get(name);
+    return tool ? tool.install : null;
+  }
+
+  getUsageExample(name) {
+    const tool = this.tools.get(name);
+    return tool ? tool.usage : null;
+  }
+}
+
+export { LLMIntegration, RAGIntegration, Agent, AIToolsRegistry };

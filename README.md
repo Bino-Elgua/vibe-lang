@@ -1,13 +1,14 @@
 # Vibe Language
 
-A cutting-edge, AI-native programming language where voice/prompts are first-class citizens. Code in natural language or traditional syntax, and compile to JavaScript, Python, Go, Rust, and more.
+A cutting-edge, AI-native programming language where voice/prompts are first-class citizens. Code in natural language or traditional syntax, compile to 18 languages, and integrate with 20+ AI tools including TensorFlow, PyTorch, Claude, OpenAI, HuggingFace, Pinecone, and more.
 
 ## Features
 
 - **Prompt-First Syntax**: Use `%%` for AI-generated code blocks
 - **Voice Input**: `[voice: "describe what you want to build"]`
 - **AI as First-Class**: Native LLM, RAG, embeddings, agents
-- **Multi-Language Compilation**: JavaScript, Python, Rust, Go, etc.
+- **Multi-Language Compilation**: 18 targets (JS, Python, Go, Rust, Julia, Idris, Move, R, Prolog, Lisp, Haskell, Lua, MATLAB, Scala, Clojure, OCaml, Scheme, Wolfram)
+- **AI Tools Integration**: TensorFlow, PyTorch, OpenAI, Claude, Groq, HuggingFace, Pinecone, Weaviate, Pandas, OpenCV, and 10+ more
 - **Type Safe**: Inspired by Rust, Idris, Julia
 - **No Nulls**: Option/Result types
 - **Multiple Dispatch**: Like Julia

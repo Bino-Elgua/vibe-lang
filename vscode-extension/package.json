@@ -1,0 +1,83 @@
+{
+  "name": "vibe-language",
+  "displayName": "Vibe Language",
+  "description": "AI-native programming language support for VSCode",
+  "version": "0.1.0",
+  "publisher": "vibe-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Formatters",
+    "Linters"
+  ],
+  "keywords": [
+    "vibe",
+    "ai",
+    "programming language",
+    "compiler"
+  ],
+  "activationEvents": [
+    "onLanguage:vibe"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "vibe",
+        "aliases": [
+          "Vibe",
+          "vibe"
+        ],
+        "extensions": [
+          ".vibe"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vibe",
+        "scopeName": "source.vibe",
+        "path": "./syntaxes/vibe.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "vibe",
+        "path": "./snippets/vibe.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Vibe Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/vibe-dark.json"
+      },
+      {
+        "label": "Vibe Light",
+        "uiTheme": "vs",
+        "path": "./themes/vibe-light.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.70.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^4.7.0",
+    "vscode-test": "^1.6.1"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.0.0"
+  }
+}

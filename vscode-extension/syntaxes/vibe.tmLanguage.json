@@ -1,0 +1,102 @@
+{
+  "name": "Vibe",
+  "scopeName": "source.vibe",
+  "fileTypes": ["vibe"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#keywords" },
+    { "include": "#functions" },
+    { "include": "#types" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.vibe",
+          "match": "//.*?$"
+        },
+        {
+          "name": "comment.block.vibe",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.vibe",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.vibe", "match": "\\\\." }
+          ]
+        },
+        {
+          "name": "string.quoted.single.vibe",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            { "name": "constant.character.escape.vibe", "match": "\\\\." }
+          ]
+        },
+        {
+          "name": "string.quoted.backtick.vibe",
+          "begin": "`",
+          "end": "`"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.vibe",
+          "match": "\\b(fn|struct|enum|impl|trait|type|if|else|while|for|loop|break|continue|return|match|async|await|pub|mut|const)\\b"
+        },
+        {
+          "name": "keyword.ai.vibe",
+          "match": "%%|##|@|#\\[|\\]"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.vibe",
+          "match": "\\b(fn)\\s+([a-z_][a-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.vibe" },
+            "2": { "name": "entity.name.function.vibe" }
+          }
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.vibe",
+          "match": "\\b(i32|i64|f32|f64|str|bool|Option|Result|None|Some)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.vibe",
+          "match": "\\b([0-9]+\\.?[0-9]*)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.vibe",
+          "match": "(\\+|-|\\*|/|%|=|==|!=|<|>|<=|>=|&&|\\|\\||!|::|->)"
+        }
+      ]
+    }
+  }
+}
