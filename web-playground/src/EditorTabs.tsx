@@ -35,19 +35,19 @@ export const EditorTabs: React.FC = () => {
   }
 
   return (
-    <div className="flex items-center bg-slate-800 border-b border-slate-700/50 overflow-x-auto">
+    <div className="flex items-center bg-slate-800/50 border-b border-slate-700/30 overflow-x-auto">
       {openFileObjects.map((file) => (
         <div
           key={file.id}
           onClick={() => setCurrentFile(file.id)}
-          className={`flex items-center gap-2 px-4 py-2 text-sm border-r border-slate-700/30 cursor-pointer transition-colors ${
+          className={`group flex items-center gap-2 px-4 py-2.5 text-sm border-r border-slate-700/20 cursor-pointer transition-all whitespace-nowrap ${
             currentFileId === file.id
-              ? 'bg-slate-700/50 text-blue-400 border-b-2 border-blue-500'
-              : 'text-slate-400 hover:bg-slate-700/25'
+              ? 'bg-slate-700/40 text-blue-400 border-b-2 border-blue-500'
+              : 'text-slate-500 hover:bg-slate-700/20 hover:text-slate-400'
           }`}
         >
-          <FileCode size={14} />
-          <span>{file.name}</span>
+          <FileCode size={13} className="flex-shrink-0" />
+          <span className="text-xs font-medium max-w-[120px] truncate">{file.name}</span>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -57,7 +57,7 @@ export const EditorTabs: React.FC = () => {
                 if (nextFile) setCurrentFile(nextFile);
               }
             }}
-            className="ml-1 p-0.5 hover:bg-slate-600 rounded"
+            className="ml-auto p-0.5 hover:bg-slate-600/50 rounded text-slate-500 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-all"
             title="Close file"
           >
             <X size={12} />

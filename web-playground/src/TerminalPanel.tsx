@@ -48,7 +48,7 @@ export const TerminalPanel: React.FC = () => {
 
     // Initial message
     term.writeln('\x1b[38;5;87m🎵 Vibe IDE Terminal\x1b[0m');
-    term.writeln('\x1b[38;5;240mReady. Type npm commands or execute code.\x1b[0m\r\n');
+    term.writeln('\x1b[38;5;240mReady. Try: npm run dev, vibe compile main.vibe, python out.py\x1b[0m\r\n');
 
     // Handle input
     term.onData((data) => {
@@ -124,20 +124,21 @@ export const TerminalPanel: React.FC = () => {
   ] as const;
 
   return (
-    <div className={`flex flex-col bg-slate-900 border-t border-slate-700/50 ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
+    <div className={`flex flex-col bg-slate-900 border-t border-slate-700/30 ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
       style={!isFullscreen ? { height: `${terminalState.height}px` } : {}}>
       
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-700/50 bg-slate-800">
-        <div className="flex gap-1">
+      {/* Header with Tabs */}
+      <div className="flex items-center justify-between gap-4 px-4 py-0 border-b border-slate-700/30 bg-slate-800/50">
+        {/* Tabs */}
+        <div className="flex gap-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setTerminalState({ activeTab: tab.id as any })}
-              className={`px-3 py-1 text-xs font-medium rounded-t transition-colors ${
+              className={`px-4 py-3 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
                 terminalState.activeTab === tab.id
-                  ? 'bg-slate-700 text-blue-400 border-b-2 border-blue-500'
-                  : 'text-slate-400 hover:text-slate-300'
+                  ? 'text-blue-400 border-blue-500 bg-slate-700/20'
+                  : 'text-slate-500 border-transparent hover:text-slate-400 hover:bg-slate-700/10'
               }`}
             >
               {tab.label}
@@ -145,27 +146,28 @@ export const TerminalPanel: React.FC = () => {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Controls */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={handleClear}
-            className="p-1.5 hover:bg-slate-700 rounded text-slate-400 transition-colors"
+            className="p-2 hover:bg-slate-700/40 rounded text-slate-500 hover:text-slate-300 transition-colors"
             title="Clear terminal"
           >
-            <RotateCcw size={16} />
+            <RotateCcw size={14} />
           </button>
           <button
             onClick={handleToggleFullscreen}
-            className="p-1.5 hover:bg-slate-700 rounded text-slate-400 transition-colors"
+            className="p-2 hover:bg-slate-700/40 rounded text-slate-500 hover:text-slate-300 transition-colors"
             title="Toggle fullscreen"
           >
-            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
           <button
             onClick={handleClose}
-            className="p-1.5 hover:bg-slate-700 rounded text-slate-400 transition-colors"
+            className="p-2 hover:bg-slate-700/40 rounded text-slate-500 hover:text-slate-300 transition-colors"
             title="Close terminal"
           >
-            <X size={16} />
+            <X size={14} />
           </button>
         </div>
       </div>
