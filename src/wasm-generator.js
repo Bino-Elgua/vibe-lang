@@ -147,4 +147,4 @@ module.exports = { initWasm, loadWasm, callWasm };
   }
 }
 
-module.exports = WasmGenerator;
+export { WasmGenerator };

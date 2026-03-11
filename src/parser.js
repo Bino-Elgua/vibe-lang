@@ -16,9 +16,13 @@ class Parser {
   constructor(tokens) {
     this.tokens = tokens;
     this.pos = 0;
+    this.errors = [];
   }
 
   current() {
+    if (this.pos >= this.tokens.length) {
+      return { type: TokenType.EOF, value: null, line: 0, column: 0 };
+    }
     return this.tokens[this.pos];
   }
 
@@ -50,59 +54,192 @@ class Parser {
     return null;
   }
 
+  synchronize() {
+    this.advance();
+    while (this.current().type !== TokenType.EOF) {
+      if ([
+        TokenType.FN,
+        TokenType.STRUCT,
+        TokenType.ENUM,
+        TokenType.IF,
+        TokenType.MATCH,
+        TokenType.RETURN,
+        TokenType.LET,
+        TokenType.CONST,
+        TokenType.FOR,
+        TokenType.WHILE,
+        TokenType.LOOP,
+        TokenType.TRAIT,
+        TokenType.IMPL,
+        TokenType.USE,
+        TokenType.SWARM,
+        TokenType.SKILL,
+        TokenType.SECURE,
+      ].includes(this.current().type)) {
+        return;
+      }
+      if (this.tokens[this.pos - 1]?.type === TokenType.RBRACE) {
+        return;
+      }
+      this.advance();
+    }
+  }
+
+  addError(message, token = null) {
+    const t = token || this.current();
+    this.errors.push({
+      message,
+      line: t?.line || 0,
+      column: t?.column || 0,
+      token: t?.type || 'EOF',
+    });
+  }
+
   parse() {
     const statements = [];
     while (this.current().type !== TokenType.EOF) {
       statements.push(this.parseStatement());
     }
-    return new ASTNode('Program', { statements });
+    const program = new ASTNode('Program', { statements });
+    return { ast: program, errors: this.errors };
   }
 
   parseStatement() {
-    const token = this.current();
+    try {
+      const token = this.current();
 
-    // Function declaration
-    if (token.type === TokenType.FN) {
-      return this.parseFunctionDecl();
-    }
+      if (token.type === TokenType.FN) {
+        return this.parseFunctionDecl();
+      }
+      if (token.type === TokenType.STRUCT) {
+        return this.parseStructDecl();
+      }
+      if (token.type === TokenType.ENUM) {
+        return this.parseEnumDecl();
+      }
+      if (token.type === TokenType.IF) {
+        return this.parseIfStatement();
+      }
+      if (token.type === TokenType.MATCH) {
+        return this.parseMatchStatement();
+      }
+      if (token.type === TokenType.RETURN) {
+        this.advance();
+        const value = this.parseExpression();
+        this.match(TokenType.SEMICOLON);
+        return new ASTNode('Return', { value });
+      }
+      if (token.type === TokenType.LET || token.type === TokenType.CONST) {
+        return this.parseVariableDecl();
+      }
 
-    // Struct declaration
-    if (token.type === TokenType.STRUCT) {
-      return this.parseStructDecl();
-    }
+      // Swarm declaration
+      if (token.type === TokenType.SWARM) {
+        return this.parseSwarmDecl();
+      }
 
-    // Enum declaration
-    if (token.type === TokenType.ENUM) {
-      return this.parseEnumDecl();
-    }
+      // Skill declaration
+      if (token.type === TokenType.SKILL) {
+        return this.parseSkillDecl();
+      }
 
-    // If statement
-    if (token.type === TokenType.IF) {
-      return this.parseIfStatement();
-    }
+      // Secure block
+      if (token.type === TokenType.SECURE) {
+        return this.parseSecureBlock();
+      }
 
-    // Match statement
-    if (token.type === TokenType.MATCH) {
-      return this.parseMatchStatement();
-    }
+      // Loop until
+      if (token.type === TokenType.LOOP) {
+        if (this.peek()?.type === TokenType.UNTIL) {
+          return this.parseLoopUntil();
+        }
+      }
 
-    // Return statement
-    if (token.type === TokenType.RETURN) {
-      this.advance();
-      const value = this.parseExpression();
+      // Use/import
+      if (token.type === TokenType.USE) {
+        return this.parseUseStatement();
+      }
+
+      // For loop
+      if (token.type === TokenType.FOR) {
+        return this.parseForLoop();
+      }
+
+      // While loop
+      if (token.type === TokenType.WHILE) {
+        return this.parseWhileLoop();
+      }
+
+      // Async function
+      if (token.type === TokenType.ASYNC) {
+        return this.parseAsyncFunction();
+      }
+
+      // Trait declaration
+      if (token.type === TokenType.TRAIT) {
+        return this.parseTraitDecl();
+      }
+
+      // Impl block
+      if (token.type === TokenType.IMPL) {
+        return this.parseImplDecl();
+      }
+
+      // Break
+      if (token.type === TokenType.BREAK) {
+        this.advance();
+        this.match(TokenType.SEMICOLON);
+        return new ASTNode('Break', {});
+      }
+
+      // Continue
+      if (token.type === TokenType.CONTINUE) {
+        this.advance();
+        this.match(TokenType.SEMICOLON);
+        return new ASTNode('Continue', {});
+      }
+
+      // Check for assignment: identifier = expr (including `mut x = ...`)
+      if (token.type === TokenType.MUT) {
+        this.advance();
+        const name = this.expect(TokenType.IDENTIFIER).value;
+        this.expect(TokenType.ASSIGN);
+        const value = this.parseExpression();
+        this.match(TokenType.SEMICOLON);
+        return new ASTNode('VariableDecl', { name, type: null, value, isMut: true });
+      }
+
+      if (token.type === TokenType.IDENTIFIER && this.peek()?.type === TokenType.ASSIGN) {
+        const name = this.expect(TokenType.IDENTIFIER).value;
+        this.expect(TokenType.ASSIGN);
+        const value = this.parseExpression();
+        this.match(TokenType.SEMICOLON);
+        return new ASTNode('Assignment', { name, value });
+      }
+
+      // AI keywords used as statements: agent X = { ... }
+      if ([TokenType.AI, TokenType.RAG, TokenType.EMBED, TokenType.AGENT].includes(token.type)) {
+        this.advance(); // skip keyword
+        if (this.current().type === TokenType.IDENTIFIER) {
+          const name = this.expect(TokenType.IDENTIFIER).value;
+          if (this.current().type === TokenType.ASSIGN) {
+            this.advance();
+            const value = this.parseExpression();
+            this.match(TokenType.SEMICOLON);
+            return new ASTNode('Assignment', { name, value });
+          }
+        }
+        // Fall through to expression parsing if not assignment
+      }
+
+      const expr = this.parseExpression();
       this.match(TokenType.SEMICOLON);
-      return new ASTNode('Return', { value });
+      return expr;
+    } catch (error) {
+      this.addError(error.message);
+      this.synchronize();
+      return new ASTNode('Error', { message: error.message });
     }
-
-    // Variable declaration
-    if (token.type === TokenType.LET || token.type === TokenType.CONST) {
-      return this.parseVariableDecl();
-    }
-
-    // Expression statement
-    const expr = this.parseExpression();
-    this.match(TokenType.SEMICOLON);
-    return expr;
   }
 
   parseFunctionDecl() {
@@ -195,7 +332,7 @@ class Parser {
     this.expect(TokenType.LBRACE);
 
     const fields = [];
-    while (this.current().type !== TokenType.RBRACE) {
+    while (this.current().type !== TokenType.RBRACE && this.current().type !== TokenType.EOF) {
       const fieldName = this.expect(TokenType.IDENTIFIER).value;
       this.expect(TokenType.COLON);
       const fieldType = this.parseType();
@@ -217,7 +354,7 @@ class Parser {
     this.expect(TokenType.LBRACE);
 
     const variants = [];
-    while (this.current().type !== TokenType.RBRACE) {
+    while (this.current().type !== TokenType.RBRACE && this.current().type !== TokenType.EOF) {
       variants.push(this.expect(TokenType.IDENTIFIER).value);
       if (this.current().type !== TokenType.RBRACE) {
         this.expect(TokenType.COMMA);
@@ -249,7 +386,7 @@ class Parser {
     this.expect(TokenType.LBRACE);
 
     const arms = [];
-    while (this.current().type !== TokenType.RBRACE) {
+    while (this.current().type !== TokenType.RBRACE && this.current().type !== TokenType.EOF) {
       const pattern = this.parsePattern();
       this.expect(TokenType.FAT_ARROW);
       const body = this.parseExpression();
@@ -304,15 +441,230 @@ class Parser {
     return new ASTNode('VariableDecl', { name, type, value, isMut });
   }
 
+  parseSwarmDecl() {
+    this.expect(TokenType.SWARM);
+    let name = null;
+    if (this.current().type === TokenType.IDENTIFIER) {
+      name = this.expect(TokenType.IDENTIFIER).value;
+    }
+    this.expect(TokenType.LBRACE);
+
+    const agents = [];
+    while (this.current().type !== TokenType.RBRACE && this.current().type !== TokenType.EOF) {
+      const agentName = this.expect(TokenType.IDENTIFIER).value;
+      let role = null;
+
+      if (this.current().type === TokenType.COLON) {
+        this.advance();
+        if (this.current().type === TokenType.STRING) {
+          role = this.expect(TokenType.STRING).value;
+        } else if (this.current().type === TokenType.PROMPT) {
+          role = this.current().value;
+          this.advance();
+        } else {
+          role = this.parseExpression();
+        }
+      }
+
+      agents.push({ name: agentName, role });
+
+      if (this.current().type === TokenType.FAT_ARROW) {
+        this.advance();
+      } else if (this.current().type === TokenType.COMMA) {
+        this.advance();
+      }
+    }
+
+    if (this.current().type === TokenType.RBRACE) {
+      this.advance();
+    } else {
+      this.addError('Unterminated swarm block — expected }');
+    }
+
+    return new ASTNode('SwarmDecl', { name, agents });
+  }
+
+  parseSkillDecl() {
+    this.expect(TokenType.SKILL);
+    const name = this.expect(TokenType.IDENTIFIER).value;
+    this.expect(TokenType.LBRACE);
+
+    const properties = {};
+    while (this.current().type !== TokenType.RBRACE && this.current().type !== TokenType.EOF) {
+      const key = this.expect(TokenType.IDENTIFIER).value;
+      this.expect(TokenType.COLON);
+      const value = this.parseExpression();
+      properties[key] = value;
+
+      if (this.current().type === TokenType.COMMA) {
+        this.advance();
+      }
+    }
+
+    if (this.current().type === TokenType.RBRACE) {
+      this.advance();
+    } else {
+      this.addError('Unterminated skill block — expected }');
+    }
+
+    return new ASTNode('SkillDecl', { name, properties });
+  }
+
+  parseSecureBlock() {
+    this.expect(TokenType.SECURE);
+    const body = this.parseBlock();
+    return new ASTNode('SecureBlock', { body });
+  }
+
+  parseLoopUntil() {
+    this.expect(TokenType.LOOP);
+    this.expect(TokenType.UNTIL);
+
+    let goal = null;
+    if (this.current().type === TokenType.IDENTIFIER && this.current().value === 'goal') {
+      this.advance();
+      this.expect(TokenType.COLON);
+    }
+    goal = this.parseExpression();
+
+    const body = this.parseBlock();
+    return new ASTNode('LoopUntil', { goal, body });
+  }
+
+  parseUseStatement() {
+    this.expect(TokenType.USE);
+    const parts = [this.expect(TokenType.IDENTIFIER).value];
+
+    while (this.current().type === TokenType.DOUBLE_COLON || this.current().type === TokenType.DOT) {
+      this.advance();
+      parts.push(this.expect(TokenType.IDENTIFIER).value);
+    }
+
+    this.match(TokenType.SEMICOLON);
+    return new ASTNode('UseStatement', { path: parts });
+  }
+
+  parseForLoop() {
+    this.expect(TokenType.FOR);
+    const variable = this.expect(TokenType.IDENTIFIER).value;
+    const inToken = this.current();
+    if (inToken.type === TokenType.IDENTIFIER && inToken.value === 'in') {
+      this.advance();
+    } else {
+      this.addError('Expected "in" in for loop');
+    }
+    const iterable = this.parseExpression();
+    const body = this.parseBlock();
+    return new ASTNode('ForLoop', { variable, iterable, body });
+  }
+
+  parseWhileLoop() {
+    this.expect(TokenType.WHILE);
+    const condition = this.parseExpression();
+    const body = this.parseBlock();
+    return new ASTNode('WhileLoop', { condition, body });
+  }
+
+  parseAsyncFunction() {
+    this.expect(TokenType.ASYNC);
+    this.expect(TokenType.FN);
+    const name = this.expect(TokenType.IDENTIFIER).value;
+
+    let typeParams = [];
+    if (this.current().type === TokenType.LT) {
+      this.advance();
+      typeParams = this.parseTypeParamList();
+      this.expect(TokenType.GT);
+    }
+
+    this.expect(TokenType.LPAREN);
+    const params = this.parseParamList();
+    this.expect(TokenType.RPAREN);
+
+    let returnType = null;
+    if (this.current().type === TokenType.ARROW) {
+      this.advance();
+      returnType = this.parseType();
+    }
+
+    const body = this.parseBlock();
+    return new ASTNode('FunctionDecl', { name, params, returnType, body, typeParams, isAsync: true });
+  }
+
+  parseTraitDecl() {
+    this.expect(TokenType.TRAIT);
+    const name = this.expect(TokenType.IDENTIFIER).value;
+    this.expect(TokenType.LBRACE);
+
+    const methods = [];
+    while (this.current().type !== TokenType.RBRACE && this.current().type !== TokenType.EOF) {
+      this.expect(TokenType.FN);
+      const methodName = this.expect(TokenType.IDENTIFIER).value;
+      this.expect(TokenType.LPAREN);
+      const params = this.parseParamList();
+      this.expect(TokenType.RPAREN);
+
+      let returnType = null;
+      if (this.current().type === TokenType.ARROW) {
+        this.advance();
+        returnType = this.parseType();
+      }
+
+      let body = null;
+      if (this.current().type === TokenType.LBRACE) {
+        body = this.parseBlock();
+      } else {
+        this.match(TokenType.SEMICOLON);
+      }
+
+      methods.push({ name: methodName, params, returnType, body });
+    }
+
+    this.expect(TokenType.RBRACE);
+    return new ASTNode('TraitDecl', { name, methods });
+  }
+
+  parseImplDecl() {
+    this.expect(TokenType.IMPL);
+    const traitOrType = this.expect(TokenType.IDENTIFIER).value;
+
+    let traitName = null;
+    let typeName = traitOrType;
+
+    if (this.current().type === TokenType.FOR || (this.current().type === TokenType.IDENTIFIER && this.current().value === 'for')) {
+      this.advance();
+      traitName = traitOrType;
+      typeName = this.expect(TokenType.IDENTIFIER).value;
+    }
+
+    this.expect(TokenType.LBRACE);
+
+    const methods = [];
+    while (this.current().type !== TokenType.RBRACE && this.current().type !== TokenType.EOF) {
+      if (this.current().type === TokenType.ASYNC) {
+        methods.push(this.parseAsyncFunction());
+      } else {
+        methods.push(this.parseFunctionDecl());
+      }
+    }
+
+    this.expect(TokenType.RBRACE);
+    return new ASTNode('ImplDecl', { trait: traitName, typeName, methods });
+  }
+
   parseBlock() {
     this.expect(TokenType.LBRACE);
     const statements = [];
 
-    while (this.current().type !== TokenType.RBRACE) {
+    while (this.current().type !== TokenType.RBRACE && this.current().type !== TokenType.EOF) {
       statements.push(this.parseStatement());
     }
 
-    this.expect(TokenType.RBRACE);
+    if (this.current().type === TokenType.RBRACE) {
+      this.advance();
+    } else {
+      this.addError('Unterminated block — expected }');
+    }
 
     return new ASTNode('Block', { statements });
   }
@@ -419,6 +771,18 @@ class Parser {
   }
 
   parseUnary() {
+    if (this.current().type === TokenType.AWAIT) {
+      this.advance();
+      const expr = this.parseUnary();
+      return new ASTNode('AwaitExpr', { expr });
+    }
+
+    if (this.current().type === TokenType.SPAWN) {
+      this.advance();
+      const expr = this.parseUnary();
+      return new ASTNode('SpawnExpr', { expr });
+    }
+
     if (this.current().type === TokenType.NOT) {
       this.advance();
       const expr = this.parseUnary();

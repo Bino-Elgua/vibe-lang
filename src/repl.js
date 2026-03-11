@@ -95,7 +95,10 @@ class VibeREPL {
       const lexer = new Lexer(input);
       const tokens = lexer.tokenize();
       const parser = new Parser(tokens);
-      const ast = parser.parse();
+      const { ast, errors } = parser.parse();
+      if (errors.length > 0) {
+        errors.forEach(e => console.warn(`  Line ${e.line}:${e.column} - ${e.message}`));
+      }
 
       console.log('✓ Parsed successfully');
       console.log(JSON.stringify(ast, null, 2).substring(0, 500) + '...');

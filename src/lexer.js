@@ -47,6 +47,10 @@ const TokenType = {
   AGENT: 'AGENT',
   PROMPT: 'PROMPT', // %%
   VOICE: 'VOICE',   // [voice: ...]
+  SWARM: 'SWARM',
+  SKILL: 'SKILL',
+  SECURE: 'SECURE',
+  UNTIL: 'UNTIL',
 
   // Operators
   PLUS: 'PLUS',
@@ -195,11 +199,22 @@ class Lexer {
   }
 
   readPrompt() {
-    // %% ... (prompt marker)
+    // %% ... (prompt marker) — stops at newline or unmatched closing brace
     this.advance(); // skip %
     this.advance(); // skip %
     const chars = [];
+    let braceDepth = 0;
     while (this.current() && this.current() !== '\n') {
+      if (this.current() === '{') {
+        braceDepth++;
+      } else if (this.current() === '}') {
+        if (braceDepth > 0) {
+          braceDepth--;
+        } else {
+          // Unmatched '}' — this is the block-closing brace, stop here
+          break;
+        }
+      }
       chars.push(this.current());
       this.advance();
     }
@@ -247,6 +262,10 @@ class Lexer {
     ai: TokenType.AI,
     rag: TokenType.RAG,
     embed: TokenType.EMBED,
+    swarm: TokenType.SWARM,
+    skill: TokenType.SKILL,
+    secure: TokenType.SECURE,
+    until: TokenType.UNTIL,
     agent: TokenType.AGENT,
   };
 

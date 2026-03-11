@@ -198,4 +198,4 @@ class TypeInferenceEngine {
   }
 }
 
-module.exports = TypeInferenceEngine;
+export { TypeInferenceEngine };

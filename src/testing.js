@@ -249,6 +249,64 @@ class Assertions {
       throw new Error(msg);
     }
   }
+
+  // Agent-specific assertions
+
+  static assertConvergesIn(fn, maxIterations, message) {
+    let iterations = 0;
+    while (iterations < maxIterations) {
+      iterations++;
+      const result = fn(iterations);
+      if (result === true || result === 'done' || result === 'converged') {
+        return iterations;
+      }
+    }
+    throw new Error(message || `Failed to converge in ${maxIterations} iterations`);
+  }
+
+  static assertMemoryContains(memory, key, message) {
+    const found = Array.isArray(memory)
+      ? memory.some(item => {
+          if (typeof item === 'string') return item.includes(key);
+          if (item && item.content) return item.content.includes(key);
+          return false;
+        })
+      : (memory instanceof Map ? memory.has(key) : key in memory);
+
+    if (!found) {
+      throw new Error(message || `Memory does not contain: "${key}"`);
+    }
+  }
+
+  static assertAgentOutput(agent, input, expectedPattern, message) {
+    const output = typeof agent === 'function' ? agent(input) : String(agent);
+    const matches = typeof expectedPattern === 'string'
+      ? output.includes(expectedPattern)
+      : expectedPattern.test(output);
+
+    if (!matches) {
+      throw new Error(message || `Agent output "${output.substring(0, 100)}" does not match expected pattern`);
+    }
+  }
+
+  static assertToolCalled(log, toolName, message) {
+    const called = Array.isArray(log)
+      ? log.some(entry => entry.tool === toolName || entry.name === toolName || entry === toolName)
+      : false;
+
+    if (!called) {
+      throw new Error(message || `Tool "${toolName}" was not called`);
+    }
+  }
+
+  static async assertResolvesWithin(promise, timeoutMs, message) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(message || `Did not resolve within ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ]);
+  }
 }
 
 /**
@@ -284,18 +342,4 @@ class TestMacroParser {
   }
 }
 
-module.exports = {
-  TestRunner,
-  Assertions,
-  TestMacroParser,
-  // Convenient exports for tests
-  assert: Assertions.assert,
-  assertEquals: Assertions.assertEquals,
-  assertTrue: Assertions.assertTrue,
-  assertFalse: Assertions.assertFalse,
-  assertThrows: Assertions.assertThrows,
-  assertArrayEquals: Assertions.assertArrayEquals,
-  assertObjectEquals: Assertions.assertObjectEquals,
-  assertCloseTo: Assertions.assertCloseTo,
-  assertStringContains: Assertions.assertStringContains
-};
+export { TestRunner, Assertions, TestMacroParser };

@@ -97,6 +97,13 @@ class StandardLibrary {
       'enumerate': this.enumerate,
       'any': this.any,
       'all': this.all,
+
+      // Agent patterns
+      'plan_then_execute': this.planThenExecute,
+      'human_in_loop': this.humanInLoop,
+      'retry_with_backoff': this.retryWithBackoff,
+      'chain_of_thought': this.chainOfThought,
+      'map_reduce_agents': this.mapReduceAgents,
     };
   }
 
@@ -286,10 +293,10 @@ class StandardLibrary {
     console.log(...args);
   }
 
-  input(prompt = '') {
+  async input(prompt = '') {
     if (prompt) this.print(prompt);
-    const readline = require('readline');
-    const rl = readline.createInterface({
+    const { createInterface } = await import('readline');
+    const rl = createInterface({
       input: process.stdin,
       output: process.stdout
     });
@@ -448,6 +455,51 @@ class StandardLibrary {
   all(arr, predicate = x => x) {
     return arr.every(predicate);
   }
+
+  // Agent Patterns
+
+  async planThenExecute(planFn, executeFn, input) {
+    const plan = await planFn(input);
+    const result = await executeFn(plan);
+    return { plan, result };
+  }
+
+  async humanInLoop(action, confirmFn = null) {
+    if (confirmFn) {
+      const approved = await confirmFn(action);
+      if (!approved) return { status: 'rejected', action };
+    }
+    const result = typeof action === 'function' ? await action() : action;
+    return { status: 'approved', result };
+  }
+
+  async retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn(attempt);
+      } catch (error) {
+        if (attempt === maxRetries) throw error;
+        const delay = baseDelay * Math.pow(2, attempt);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+
+  chainOfThought(steps) {
+    const results = [];
+    let context = {};
+    for (const step of steps) {
+      const result = typeof step === 'function' ? step(context) : step;
+      results.push(result);
+      context = { ...context, lastResult: result, step: results.length };
+    }
+    return { steps: results, finalContext: context };
+  }
+
+  async mapReduceAgents(items, mapFn, reduceFn) {
+    const mapped = await Promise.all(items.map(mapFn));
+    return reduceFn(mapped);
+  }
 }
 
-module.exports = StandardLibrary;
+export { StandardLibrary };

@@ -6,13 +6,21 @@
 import { Lexer } from './lexer.js';
 import { Parser } from './parser.js';
 import { LLMIntegration } from './llm-integration.js';
+import { TypeInferenceEngine } from './type-inference.js';
+import { IRGenerator } from './ir-generator.js';
 
 class Compiler {
   constructor(source, targetLanguage = 'javascript') {
     this.source = source;
     this.targetLanguage = targetLanguage;
     this.llm = new LLMIntegration();
+    this.typeEngine = new TypeInferenceEngine();
+    this.irGenerator = new IRGenerator();
     this.ast = null;
+    this.ir = null;
+    this.typeErrors = [];
+    this._promptDepth = 0;
+    this._maxPromptDepth = 2;
   }
 
   async compile() {
@@ -22,10 +30,26 @@ class Compiler {
 
     // Parse
     const parser = new Parser(tokens);
-    this.ast = parser.parse();
+    const result = parser.parse();
+    this.ast = result.ast;
+    this.parseErrors = result.errors;
+    if (this.parseErrors.length > 0) {
+      console.warn(`Parser warnings (${this.parseErrors.length}):`);
+      this.parseErrors.forEach(e => console.warn(`  Line ${e.line}:${e.column} - ${e.message}`));
+    }
 
-    // Process prompts with LLM
+    // Process prompts with LLM (splice generated code into AST)
     await this.processPrompts(this.ast);
+
+    // Type inference pass
+    this.typeErrors = this.runTypeInference(this.ast);
+    if (this.typeErrors.length > 0) {
+      console.warn(`Type warnings (${this.typeErrors.length}):`);
+      this.typeErrors.forEach(e => console.warn(`  ${e}`));
+    }
+
+    // IR generation pass
+    this.ir = this.generateIR(this.ast);
 
     // Generate code for target language
     const code = this.generateCode(this.ast);
@@ -33,40 +57,205 @@ class Compiler {
     return code;
   }
 
+  runTypeInference(ast) {
+    const errors = [];
+    if (!ast || !ast.statements) return errors;
+
+    for (const stmt of ast.statements) {
+      if (stmt.type === 'FunctionDecl') {
+        this.inferFunctionTypes(stmt, errors);
+      } else if (stmt.type === 'VariableDecl' && stmt.value) {
+        try {
+          const inferredType = this.typeEngine.infer(this.astToTypeExpr(stmt.value));
+          if (stmt.type_annotation) {
+            if (!this.typeEngine.isCompatible(inferredType, stmt.type_annotation)) {
+              errors.push(`Type mismatch in '${stmt.name}': expected ${stmt.type_annotation}, got ${inferredType}`);
+            }
+          }
+        } catch (e) {
+          // Non-fatal type inference failure
+        }
+      }
+    }
+
+    this.typeEngine.solve();
+    return errors;
+  }
+
+  inferFunctionTypes(fn, errors) {
+    if (!fn.body || !fn.body.statements) return;
+
+    for (const stmt of fn.body.statements) {
+      if (stmt.type === 'Return' && stmt.value && fn.returnType) {
+        try {
+          const inferredReturn = this.typeEngine.infer(this.astToTypeExpr(stmt.value));
+          const declaredReturn = typeof fn.returnType === 'string' ? fn.returnType : fn.returnType.generic || 'unknown';
+          if (inferredReturn && declaredReturn && !this.typeEngine.isCompatible(inferredReturn, declaredReturn)) {
+            errors.push(`Return type mismatch in '${fn.name}': declared ${declaredReturn}, inferred ${inferredReturn}`);
+          }
+        } catch (e) {
+          // Non-fatal
+        }
+      }
+    }
+  }
+
+  astToTypeExpr(node) {
+    if (!node) return null;
+    switch (node.type) {
+      case 'Number': return node.value;
+      case 'String': return node.value;
+      case 'Boolean': return node.value;
+      case 'Nil': return null;
+      case 'ArrayLiteral': return node.elements.map(e => this.astToTypeExpr(e));
+      case 'BinaryOp': return { type: 'binop', left: this.astToTypeExpr(node.left), op: node.op, right: this.astToTypeExpr(node.right) };
+      case 'FunctionCall': return { type: 'call', fn: node.name, args: node.args.map(a => this.astToTypeExpr(a)) };
+      case 'Identifier': return node.name;
+      default: return null;
+    }
+  }
+
+  generateIR(ast) {
+    if (!ast || !ast.statements) return null;
+
+    const irInput = {
+      module: 'main',
+      functions: [],
+      types: [],
+    };
+
+    for (const stmt of ast.statements) {
+      if (stmt.type === 'FunctionDecl') {
+        irInput.functions.push({
+          name: stmt.name,
+          params: stmt.params || [],
+          returns: typeof stmt.returnType === 'string' ? stmt.returnType : 'void',
+          body: stmt.body?.statements?.map(s => this.astToIRStatement(s)) || [],
+        });
+      } else if (stmt.type === 'StructDecl') {
+        irInput.types.push({ kind: 'struct', name: stmt.name, fields: stmt.fields || [] });
+      } else if (stmt.type === 'EnumDecl') {
+        irInput.types.push({ kind: 'enum', name: stmt.name, variants: stmt.variants || [] });
+      }
+    }
+
+    const ir = this.irGenerator.generate(irInput);
+    this.irGenerator.optimize();
+    const validation = this.irGenerator.validate();
+    if (!validation.valid) {
+      console.warn('IR validation warnings:', validation.errors);
+    }
+
+    return ir;
+  }
+
+  astToIRStatement(node) {
+    if (!node) return null;
+    switch (node.type) {
+      case 'VariableDecl': return { type: 'assignment', name: node.name, value: node.value };
+      case 'Return': return { type: 'return', value: node.value };
+      case 'FunctionCall': return { type: 'call', name: node.name, args: node.args || [] };
+      default: return { type: 'expression', node };
+    }
+  }
+
   async processPrompts(node) {
-    if (!node) return;
+    if (!node || typeof node !== 'object' || this._promptDepth >= this._maxPromptDepth) return;
+
+    // Only traverse known AST child keys (avoid iterating data properties like 'code', 'name', etc.)
+    const astChildKeys = ['statements', 'body', 'value', 'left', 'right', 'condition',
+      'thenBranch', 'elseBranch', 'expr', 'arms', 'elements', 'args', 'object', 'index'];
+
+    for (const key of astChildKeys) {
+      if (!(key in node)) continue;
+      const child = node[key];
+
+      if (Array.isArray(child)) {
+        for (let i = 0; i < child.length; i++) {
+          const item = child[i];
+          if (item && typeof item === 'object') {
+            const replaced = await this.expandPromptNode(item);
+            if (replaced) {
+              child[i] = replaced;
+            } else {
+              await this.processPrompts(item);
+            }
+          }
+        }
+      } else if (child && typeof child === 'object') {
+        const replaced = await this.expandPromptNode(child);
+        if (replaced) {
+          node[key] = replaced;
+        } else {
+          await this.processPrompts(child);
+        }
+      }
+    }
+
+    // Also check match arms bodies
+    if (node.arms && Array.isArray(node.arms)) {
+      for (const arm of node.arms) {
+        if (arm.body) {
+          const replaced = await this.expandPromptNode(arm.body);
+          if (replaced) {
+            arm.body = replaced;
+          } else {
+            await this.processPrompts(arm.body);
+          }
+        }
+      }
+    }
+  }
+
+  async expandPromptNode(node) {
+    if (!node || !node.type) return null;
+
+    let generatedCode = null;
 
     if (node.type === 'Prompt') {
-      // Generate code from prompt
-      const generated = await this.llm.generateCode(node.text, {
-        targetLanguage: this.targetLanguage,
+      generatedCode = await this.llm.generateCode(node.text, {
+        targetLanguage: 'vibe',
       });
-      // Parse and replace with generated AST
-      console.log(`Generated from prompt: ${generated}`);
     }
 
     if (node.type === 'Voice') {
-      // Extract command from voice format
       const commandMatch = node.text.match(/voice:\s*"([^"]*)"/);
       if (commandMatch) {
-        const command = commandMatch[1];
-        const generated = await this.llm.generateCode(command, {
-          targetLanguage: this.targetLanguage,
+        generatedCode = await this.llm.generateCode(commandMatch[1], {
+          targetLanguage: 'vibe',
         });
-        console.log(`Generated from voice: ${generated}`);
       }
     }
 
-    // Recursively process child nodes
-    for (const key in node) {
-      if (Array.isArray(node[key])) {
-        for (const item of node[key]) {
-          await this.processPrompts(item);
+    if (generatedCode) {
+      this._promptDepth++;
+      try {
+        const lexer = new Lexer(generatedCode);
+        const tokens = lexer.tokenize();
+        // Bail if generated code has too many tokens (likely complex/unparseable)
+        if (tokens.length > 200) {
+          return { type: 'GeneratedCode', source: node.type, prompt: node.text, code: generatedCode };
         }
-      } else if (typeof node[key] === 'object') {
-        await this.processPrompts(node[key]);
+        const parser = new Parser(tokens);
+        const { ast, errors } = parser.parse();
+        // Filter out Error nodes from recovered parse
+        const validStatements = ast.statements.filter(s => s.type !== 'Error');
+        if (validStatements.length > 0) {
+          if (validStatements.length === 1) {
+            return validStatements[0];
+          }
+          return { type: 'Block', statements: validStatements };
+        }
+        // All statements errored — return as raw generated code
+        return { type: 'GeneratedCode', source: node.type, prompt: node.text, code: generatedCode };
+      } catch (e) {
+        return { type: 'GeneratedCode', source: node.type, prompt: node.text, code: generatedCode };
+      } finally {
+        this._promptDepth--;
       }
     }
+
+    return null;
   }
 
   generateCode(node) {
@@ -130,6 +319,9 @@ class Compiler {
 
       case 'VariableDecl':
         return `${node.isMut ? 'let' : 'const'} ${node.name} = ${this.genJavaScript(node.value)};`;
+
+      case 'Assignment':
+        return `${node.name} = ${this.genJavaScript(node.value)};`;
 
       case 'Return':
         return `return ${this.genJavaScript(node.value)};`;
@@ -196,14 +388,104 @@ class Compiler {
       case 'Voice':
         return `/* Generated from voice: ${node.text} */`;
 
+      case 'GeneratedCode':
+        return `/* Generated from ${node.source}: ${node.prompt} */\n${node.code}`;
+
+      case 'Error':
+        return `/* Parse error: ${node.message} */`;
+
+      case 'SwarmDecl':
+        return this.genJSSwarm(node);
+
+      case 'SkillDecl':
+        return this.genJSSkill(node);
+
+      case 'SecureBlock':
+        return `/* SECURE BLOCK */\n(() => {\n  "use strict";\n${this.genJavaScript(node.body)}\n})();`;
+
+      case 'LoopUntil':
+        return `await (async () => {\n  const __goal = ${this.genJavaScript(node.goal)};\n  let __i = 0;\n  while (__i++ < 100) {\n${this.genJavaScript(node.body)}\n  }\n})();`;
+
+      case 'UseStatement':
+        return `import { ${node.path[node.path.length - 1]} } from './${node.path.join('/')}';`;
+
+      case 'ForLoop':
+        return `for (const ${node.variable} of ${this.genJavaScript(node.iterable)}) ${this.genJavaScript(node.body)}`;
+
+      case 'WhileLoop':
+        return `while (${this.genJavaScript(node.condition)}) ${this.genJavaScript(node.body)}`;
+
+      case 'Break':
+        return 'break;';
+
+      case 'Continue':
+        return 'continue;';
+
+      case 'AwaitExpr':
+        return `await ${this.genJavaScript(node.expr)}`;
+
+      case 'SpawnExpr':
+        return `Promise.resolve().then(() => ${this.genJavaScript(node.expr)})`;
+
+      case 'TraitDecl': {
+        let code = `// Trait: ${node.name}\n`;
+        code += `const ${node.name} = {\n`;
+        for (const m of node.methods) {
+          const params = m.params.map(p => p.name).join(', ');
+          if (m.body) {
+            code += `  ${m.name}(${params}) ${this.genJavaScript(m.body)},\n`;
+          } else {
+            code += `  ${m.name}: null, // abstract\n`;
+          }
+        }
+        code += `};`;
+        return code;
+      }
+
+      case 'ImplDecl': {
+        let code = `// impl ${node.trait ? node.trait + ' for ' : ''}${node.typeName}\n`;
+        for (const m of node.methods) {
+          const params = m.params.map(p => p.name).join(', ');
+          const asyncPrefix = m.isAsync ? 'async ' : '';
+          code += `${node.typeName}.prototype.${m.name} = ${asyncPrefix}function(${params}) ${this.genJavaScript(m.body)};\n`;
+        }
+        return code;
+      }
+
       default:
         return '';
     }
   }
 
+  genJSSwarm(node) {
+    const name = node.name || 'Swarm';
+    let code = `class ${name} {\n  constructor() {\n    this.agents = {};\n    this.pipeline = [];\n  }\n\n`;
+    code += `  async run(input) {\n    let result = input;\n`;
+    for (const agent of node.agents) {
+      code += `    result = await this.execute_${agent.name}(result);\n`;
+    }
+    code += `    return result;\n  }\n`;
+    for (const agent of node.agents) {
+      const role = typeof agent.role === 'string' ? agent.role : 'process input';
+      code += `\n  async execute_${agent.name}(input) {\n    // Role: ${role}\n    return input;\n  }\n`;
+    }
+    code += `}\n`;
+    return code;
+  }
+
+  genJSSkill(node) {
+    let code = `const ${node.name} = {\n`;
+    for (const [key, value] of Object.entries(node.properties)) {
+      code += `  ${key}: ${this.genJavaScript(value)},\n`;
+    }
+    code += `  async execute(input) {\n    return input;\n  }\n};\n`;
+    return code;
+  }
+
   genJSFunction(node) {
     const params = node.params.map(p => p.name).join(', ');
-    return `function ${node.name}(${params}) ${this.genJavaScript(node.body)}`;
+    const asyncPrefix = node.isAsync ? 'async ' : '';
+    return `${asyncPrefix}function ${node.name}(${params}) ${this.genJavaScript(node.body)}`;
   }
 
   genJSStruct(node) {
@@ -247,6 +529,9 @@ class Compiler {
       case 'VariableDecl':
         return `${node.name} = ${this.genPython(node.value)}`;
 
+      case 'Assignment':
+        return `${node.name} = ${this.genPython(node.value)}`;
+
       case 'Return':
         return `return ${this.genPython(node.value)}`;
 
@@ -270,6 +555,39 @@ class Compiler {
 
       case 'ArrayLiteral':
         return `[${node.elements.map(e => this.genPython(e)).join(', ')}]`;
+
+      case 'SwarmDecl': {
+        const name = node.name || 'Swarm';
+        let code = `class ${name}:\n    def __init__(self):\n        self.agents = {}\n        self.pipeline = []\n\n`;
+        code += `    async def run(self, input):\n        result = input\n`;
+        for (const agent of node.agents) {
+          code += `        result = await self.execute_${agent.name}(result)\n`;
+        }
+        code += `        return result\n`;
+        for (const agent of node.agents) {
+          const role = typeof agent.role === 'string' ? agent.role : 'process input';
+          code += `\n    async def execute_${agent.name}(self, input):\n        """${role}"""\n        return input\n`;
+        }
+        return code;
+      }
+
+      case 'SkillDecl': {
+        let code = `${node.name} = {\n`;
+        for (const [key, value] of Object.entries(node.properties)) {
+          code += `    "${key}": ${this.genPython(value)},\n`;
+        }
+        code += `}\n`;
+        return code;
+      }
+
+      case 'SecureBlock':
+        return `# SECURE BLOCK\ntry:\n${this.indentCode(this.genPython(node.body), 4)}\nexcept Exception as e:\n    raise RuntimeError(f"Secure block violation: {e}")`;
+
+      case 'LoopUntil':
+        return `# Loop until: ${this.genPython(node.goal)}\n__i = 0\nwhile __i < 100:\n    __i += 1\n${this.indentCode(this.genPython(node.body), 4)}`;
+
+      case 'UseStatement':
+        return node.path.length > 1 ? `from ${node.path.slice(0, -1).join('.')} import ${node.path[node.path.length - 1]}` : `import ${node.path[0]}`;
 
       default:
         return '';

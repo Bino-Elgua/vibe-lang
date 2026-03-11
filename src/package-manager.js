@@ -3,8 +3,8 @@
  * Manages Vibe packages, dependencies, and versioning
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 class PackageManager {
   constructor(registryUrl = 'https://registry.vibe-lang.dev') {
@@ -220,4 +220,4 @@ authors = ["Your Name"]
   }
 }
 
-module.exports = PackageManager;
+export { PackageManager };

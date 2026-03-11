@@ -201,17 +201,65 @@ Only output the code, no explanations.`;
   }
 }
 
-// RAG (Retrieval Augmented Generation)
+// RAG (Retrieval Augmented Generation) with persistent file-based storage
 class RAGIntegration {
-  constructor() {
+  constructor(storagePath = null) {
     this.documents = [];
     this.embeddings = new Map();
+    this.storagePath = storagePath;
+    this._loaded = false;
   }
 
-  async addDocument(id, content) {
-    this.documents.push({ id, content });
+  async init() {
+    if (this.storagePath && !this._loaded) {
+      await this._loadFromDisk();
+      this._loaded = true;
+    }
+    return this;
+  }
+
+  async _loadFromDisk() {
+    try {
+      const fs = (await import('fs')).default;
+      if (fs.existsSync(this.storagePath)) {
+        const data = JSON.parse(fs.readFileSync(this.storagePath, 'utf-8'));
+        this.documents = data.documents || [];
+        if (data.embeddings) {
+          for (const [key, value] of Object.entries(data.embeddings)) {
+            this.embeddings.set(key, value);
+          }
+        }
+      }
+    } catch (e) {
+      // No saved data — start fresh
+    }
+  }
+
+  async _saveToDisk() {
+    if (!this.storagePath) return;
+    try {
+      const fs = (await import('fs')).default;
+      const data = {
+        documents: this.documents,
+        embeddings: Object.fromEntries(this.embeddings),
+      };
+      fs.writeFileSync(this.storagePath, JSON.stringify(data));
+    } catch (e) {
+      console.warn('Failed to save RAG data:', e.message);
+    }
+  }
+
+  async addDocument(id, content, metadata = {}) {
+    this.documents.push({ id, content, metadata, timestamp: Date.now() });
     const embedding = await this.embed(content);
     this.embeddings.set(id, embedding);
+    await this._saveToDisk();
+  }
+
+  async removeDocument(id) {
+    this.documents = this.documents.filter(d => d.id !== id);
+    this.embeddings.delete(id);
+    await this._saveToDisk();
   }
 
   async search(query, topK = 5) {
@@ -219,7 +267,8 @@ class RAGIntegration {
     const scores = this.documents.map(doc => ({
       id: doc.id,
       content: doc.content,
-      score: this.cosineSimilarity(queryEmbedding, this.embeddings.get(doc.id)),
+      metadata: doc.metadata || {},
+      score: this.cosineSimilarity(queryEmbedding, this.embeddings.get(doc.id) || []),
     }));
 
     scores.sort((a, b) => b.score - a.score);
@@ -227,15 +276,38 @@ class RAGIntegration {
   }
 
   async embed(text) {
-    // Use Claude embeddings API (simplified)
-    const embedding = new Array(1536).fill(0).map(() => Math.random());
+    // Deterministic character-frequency hash embedding (works offline)
+    const embedding = new Array(384).fill(0);
+    for (let i = 0; i < text.length; i++) {
+      const idx = text.charCodeAt(i) % 384;
+      embedding[idx] += 1.0 / text.length;
+    }
+    const magnitude = Math.sqrt(embedding.reduce((s, v) => s + v * v, 0));
+    if (magnitude > 0) {
+      for (let i = 0; i < embedding.length; i++) {
+        embedding[i] /= magnitude;
+      }
+    }
     return embedding;
   }
 
   cosineSimilarity(a, b) {
-    const dotProduct = a.reduce((sum, av, i) => sum + av * b[i], 0);
-    const magnitude = (vec) => Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
-    return dotProduct / (magnitude(a) * magnitude(b));
+    if (!a || !b || a.length === 0 || b.length === 0) return 0;
+    const dotProduct = a.reduce((sum, av, i) => sum + av * (b[i] || 0), 0);
+    const magA = Math.sqrt(a.reduce((sum, v) => sum + v * v, 0));
+    const magB = Math.sqrt(b.reduce((sum, v) => sum + v * v, 0));
+    if (magA === 0 || magB === 0) return 0;
+    return dotProduct / (magA * magB);
+  }
+
+  async clear() {
+    this.documents = [];
+    this.embeddings = new Map();
+    await this._saveToDisk();
+  }
+
+  get size() {
+    return this.documents.length;
   }
 }
 
